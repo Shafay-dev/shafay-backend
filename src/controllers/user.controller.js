@@ -99,7 +99,6 @@ const registerUser = asyncHandler(async (req, res) => {
 
 }); 
 
-
 const loginUser = asyncHandler(async (req, res) => {
     // req body se data le ao
     // username email wagera hai ya nai
@@ -182,10 +181,10 @@ const logoutUser = asyncHandler(async (req, res) => {
     .json(new apiResponse(200, {}, "User logged out successfully"))
 })
 
-const  refreshAccessToken = asyncHandler(async (req, res) => {
+const refreshAccessToken = asyncHandler(async (req, res) => {
     const incomingRefreshToken = req.cookies.refreshToken
 
-    if (incomingRefreshToken) {
+    if (!incomingRefreshToken) {
         throw new apiError(401, "Unauthorized request")
     }
 
@@ -220,4 +219,105 @@ const  refreshAccessToken = asyncHandler(async (req, res) => {
     }
 }) 
 
-export { registerUser, loginUser, logoutUser, refreshAccessToken }  
+const changeCurrentPassword = asyncHandler(async (req, res) => {
+    const { oldPassword, newPassword } = req.body;
+
+    const user = await User.findById(req.user?._id)
+    const isPasswordCorrect = await user.isPasswordCorrect(oldPassword)
+
+    if (!isPasswordCorrect) {
+        throw new apiError(400, "Old password is incorrect")
+    }
+
+    user.password = newPassword
+    await user.save({ validateBeforeSave: false })
+    return res.status(200).json(new apiResponse(200, {}, "Password changed successfully"))
+
+});
+
+//need to take current user 
+
+const getCurrentUser = asyncHandler(async (req, res) => {
+    return res.status(200).json(new apiResponse(200, req.user, "User fetched successfully"))
+})
+
+const updateAccountDeatils = asyncHandler(async (req, res) => {
+    const { fullName, email } = req.body
+
+    if(!fullName || !email) {
+        throw new apiError(400, "All fields are required")
+    }
+
+    //now find user and update
+
+    const user = await User.findById(
+        req.user?._id,
+        {
+            $set: {
+                fullName,
+                email
+            }
+        },
+        {
+            new: true
+        }
+        
+    ).select("-password")
+
+    return res.status(200).json(new apiResponse(200, user, "Account details updated successfully"))
+})
+
+//now to update files
+
+const updateProfilePicture = asyncHandler(async (req, res) => 
+{
+    const avatarLocalPath = req.file?.path 
+
+    if(!avatarLocalPath) {
+        throw new apiError(400, "Profile picture is required")
+    }
+
+    const avatar = await uploadOnCloudinary(avatarLocalPath)
+    
+    if (!avatar.url) {
+        throw new apiError(400, "Something went wrong while uploading profile picture")
+    }
+
+    const user = await User.findByIdAndUpdate(req.user?._id, {
+        $set: {
+            avatar: avatar.url
+        }
+    }, {
+        new: true
+    }.select("-password"))
+
+    return res.status(200).json(new apiResponse(200, user, "Profile picture updated successfully"))
+
+})
+
+const updateCoverImage = asyncHandler(async (req, res) => {
+    const coverImageLocalPath = req.file?.path
+
+    if(!coverImageLocalPath) {
+        throw new apiError(400, "Cover image is required")
+    }
+
+    const coverImage = await uploadOnCloudinary(coverImageLocalPath)
+
+    if (!coverImage.url) {
+        throw new apiError(400, "Something went wrong while uploading cover image")
+    }
+
+    const user = await User.findByIdAndUpdate(req.user?._id, {
+        $set: {
+            coverImage: coverImage.url
+        }
+    }, {
+        new: true
+    }.select("-password"))
+
+    return res.status(200).json(new apiResponse(200, user, "Cover image updated successfully"))
+
+})
+
+export { registerUser, loginUser, logoutUser, refreshAccessToken, changeCurrentPassword, getCurrentUser, updateAccountDeatils, updateProfilePicture, updateCoverImage }  
